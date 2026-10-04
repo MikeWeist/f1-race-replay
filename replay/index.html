@@ -855,9 +855,17 @@ let audioStatus = "commentary: loading";
 const setAudioStatus = s => { audioStatus = s; };
 function showAudioStatus(T) {
   const from = D.audio?.liveFrom;
-  $("#audio-state").textContent = player.useAudio && from && T < from - 1000
-    ? `commentary starts at ${raceClock(from - raceStart)}`
-    : audioStatus;
+  // F1's recording can stop before the race starts (Bahrain 2026): say so up front, not just once you hit the end
+  const d = player.audio?.duration;
+  const end = player.audioReady && isFinite(d) ? D.audio.start + player.offset + d * 1000 : null;
+  const cutShort = end !== null && end < raceStart ? Math.round((raceStart - end) / 60000) : 0;
+  let text = audioStatus;
+  if (cutShort) {
+    text = T >= end ? `no commentary: F1's recording ends ${cutShort} min before lights out`
+      : `commentary: pre-race only (F1's recording ends ${cutShort} min before lights out)`;
+  }
+  if (player.useAudio && from && T < from - 1000) text = `commentary starts at ${raceClock(from - raceStart)}`;
+  $("#audio-state").textContent = text;
 }
 
 function setupPlayer() {
