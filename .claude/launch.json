@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "race-replay",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["replay_server.py", "8765"],
+      "port": 8765
+    }
+  ]
+}
