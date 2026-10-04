@@ -12,3 +12,12 @@ dist/
 
 # Downloaded Formula E sessions (build_fe_replay.py cache)
 fe_cache/
+
+# Credentials: the F1 TV token lives in ~/.f1tv_token, outside the repo; these are a safety net
+.env
+.env.*
+.f1tv_token
+*.token
+
+# Output of probe_live.py (counts only)
+probe_live_*.json

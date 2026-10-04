@@ -282,6 +282,60 @@
   .ch-head { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; cursor: default; height: 20px; }
   .ch-head:hover { background: none; }
 
+  /* ---------- race chooser ----------
+     A season calendar: each race sits beside its date, like a torn-off calendar page. The bar on
+     the left edge says what you can do with it: solid green = built, hatched = can be built,
+     yellow = data still arriving, plain = hasn't happened, red = the one playing now. */
+  .races-btn { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+  .races-btn svg { width: 9px; height: 9px; transition: transform .15s ease; }
+  .races-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+  #races-pop { position: fixed; z-index: 40; top: 60px; left: 16px; width: min(472px, calc(100vw - 32px));
+    max-height: min(74vh, 680px); display: none; flex-direction: column; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 18px 54px rgba(0,0,0,.62); overflow: hidden; outline: none; }
+  #races-pop.open { display: flex; }
+  .rc-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .rc-head h3 { margin: 0; flex: 1; font-size: 13px; font-weight: 700; }
+  .rc-list { overflow-y: auto; overscroll-behavior: contain; }
+  .rc-month { position: sticky; top: 0; z-index: 1; margin: 0; padding: 9px 12px 5px 62px; font-size: 12px;
+    font-weight: 600; color: var(--muted); background: var(--panel); }
+  .rc-row { position: relative; display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; column-gap: 12px;
+    align-items: center; padding: 9px 12px 9px 0; min-height: 54px;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+  .rc-row::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 4px;
+    border-radius: 0 2px 2px 0; background: var(--line); }
+  .rc-row.ready::before { background: var(--green); }
+  .rc-row.available::before { background: repeating-linear-gradient(135deg, var(--muted) 0 3px, transparent 3px 6px); }
+  .rc-row.pending::before { background: var(--yellow); }
+  .rc-row.failed::before { background: var(--red); }
+  .rc-row.now { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .rc-row.now::before { background: var(--accent); }
+  .rc-date { display: grid; justify-items: center; line-height: 1.05; padding-left: 4px; }
+  .rc-day { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .rc-wd { margin-top: 2px; font-size: 11px; color: var(--muted); }
+  .rc-name { font-size: 13.5px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+  .rc-sub { margin-top: 2px; font-size: 12px; color: var(--muted); line-height: 1.3; overflow-wrap: anywhere; }
+  .rc-sub.warn { color: var(--yellow); }
+  .rc-sub.bad { color: #ff7a73; }
+  .rc-act { display: flex; gap: 6px; align-items: center; white-space: nowrap; font-size: 12px; color: var(--muted); }
+  .rc-btn.watch { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .rc-playing::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px;
+    border-radius: 50%; background: var(--accent); }
+  .rc-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; }
+  .rc-bar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 30%; background: var(--green);
+    animation: rc-sweep 1.3s ease-in-out infinite; }
+  @keyframes rc-sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+  .rc-details { grid-column: 2 / 4; margin: 6px 0 0; padding: 6px 8px; font: 11.5px/1.4 var(--mono); color: var(--muted);
+    background: var(--bg); border-radius: 4px; white-space: pre-wrap; max-height: 112px; overflow: auto; }
+  .rc-note { padding: 10px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+  .rc-note.warn { color: var(--yellow); }
+  .rc-empty { padding: 18px 12px; font-size: 13px; color: var(--muted); }
+  .rc-btn:focus-visible, .races-btn:focus-visible, .rc-head .seg button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .rc-bar::after { animation: none; width: 100%; opacity: .5; }
+    .races-btn svg { transition: none; }
+  }
+  @media (max-width: 640px) { #races-pop { left: 8px; right: 8px; width: auto; top: 54px; } }
+
   /* ---------- Formula E replays: no commentary, telemetry, radio, tyres or championship panel ---------- */
   body.fe { --tower-w: 304px; }
   body.fe .top-btns, body.fe #tower-secs, body.fe #track-mode [data-mode="mini"],
@@ -304,6 +358,8 @@
 <body>
 <header>
   <div class="title"><span id="t-meeting">Loading…</span><small id="t-session"></small></div>
+  <button class="btn races-btn" id="races-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="races-pop">Races
+    <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   <div class="lap" id="lap">–</div>
   <div class="status" id="status">–</div>
   <div class="track-mode" title="Paint the track map by sector">
@@ -324,6 +380,7 @@
   <div class="weather" id="weather"></div>
   <div class="clock"><b id="race-clock">–</b><br><span id="audio-state">commentary: loading</span></div>
 </header>
+<div id="races-pop" role="dialog" aria-label="Choose a race" tabindex="-1"></div>
 
 <main>
   <section id="tower-wrap">
@@ -525,6 +582,7 @@ async function main() {
   setupMap();
   setupPlayer();
   setupControls();
+  setupChooser();
   requestAnimationFrame(frame);
 
   if (!FE) {
@@ -533,6 +591,182 @@ async function main() {
       .then(j => { CAR = j; })
       .catch(() => {});
   }
+}
+
+// ---------- race chooser ----------
+const chooser = { data: null, tab: "f1", error: "", poll: null, tick: null, details: false };
+const racePop = () => $("#races-pop");
+
+function setupChooser() {
+  chooser.tab = FE ? "fe" : "f1";
+  $("#races-btn").onclick = e => { e.stopPropagation(); toggleChooser(); };
+  racePop().addEventListener("click", onChooserClick);
+  document.addEventListener("click", e => {
+    if (racePop().classList.contains("open") && !e.target.closest("#races-pop, #races-btn")) toggleChooser(false);
+  });
+  // capture phase, so Esc closes the chooser before it reaches the shortcut that closes driver cards
+  document.addEventListener("keydown", e => {
+    if (e.code === "Escape" && racePop().classList.contains("open")) {
+      e.stopPropagation(); toggleChooser(false); $("#races-btn").focus();
+    }
+  }, true);
+}
+
+async function toggleChooser(open = !racePop().classList.contains("open")) {
+  racePop().classList.toggle("open", open);
+  $("#races-btn").setAttribute("aria-expanded", String(open));
+  clearInterval(chooser.tick);
+  if (!open) { clearInterval(chooser.poll); return; }
+  renderChooser();
+  racePop().focus();
+  chooser.tick = setInterval(renderChooser, 30000);  // keeps the countdown honest
+  await loadRaces();
+  renderChooser();
+  if (chooser.data?.build?.state === "running") pollBuild();
+}
+
+async function loadRaces() {
+  try {
+    const r = await fetch("/api/races", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    chooser.data = await r.json();
+    chooser.error = "";
+  } catch {
+    chooser.error = "The race list isn't available. Restart the replay server and try again.";
+  }
+}
+
+// "in 4 h 8 min", "in 3 days"
+function until(iso) {
+  const mins = Math.round((Date.parse(iso) - Date.now()) / 60000);
+  if (mins <= 0) return "now";
+  if (mins < 60) return `in ${mins} min`;
+  if (mins < 48 * 60) { const h = Math.floor(mins / 60), m = mins % 60; return `in ${h} h${h < 6 && m ? ` ${m} min` : ""}`; }
+  return `in ${Math.round(mins / 1440)} days`;
+}
+
+function raceRow(r, build, canBuild) {
+  const building = build?.state === "running" && build.season === r.season && build.location === r.location;
+  const failed = build?.state === "failed" && build.season === r.season && build.location === r.location && r.status === "available";
+  const day = new Date(r.date + "T12:00:00");
+  const isNow = r.file && r.file === DATA_URL;
+  let cls = r.status, sub = r.location && r.location !== r.name ? r.location : "", subCls = "", act = "", extra = "";
+  if (isNow) { cls = "now"; act = `<span class="rc-playing">Playing</span>`; }
+  else if (r.status === "ready") {
+    act = `<button class="btn rc-btn watch" data-act="watch" data-file="${esc(r.file)}">Watch</button>`;
+  } else if (building) {
+    cls = "available"; sub = build.line || "Starting…"; act = `Building… ${build.elapsed} s`; extra = `<span class="rc-bar"></span>`;
+  } else if (failed) {
+    cls = "failed"; sub = "The build failed. Try again, or see what happened."; subCls = "bad";
+    act = `<button class="btn rc-btn" data-act="details">${chooser.details ? "Hide details" : "Details"}</button>` +
+          `<button class="btn rc-btn" data-act="build" data-season="${r.season}" data-loc="${esc(r.location)}">Try again</button>`;
+    if (chooser.details) extra = `<pre class="rc-details">${esc((build.tail || []).join("\n") || "No output.")}</pre>`;
+  } else if (r.status === "available") {
+    sub = "Not built yet";
+    if (canBuild) act = `<button class="btn rc-btn" data-act="build" data-season="${r.season}" data-loc="${esc(r.location)}" ${build?.state === "running" ? "disabled title=\"Another race is building\"" : ""}>Build</button>`;
+  } else if (r.status === "pending") {
+    sub = "Data isn't complete yet. Check back after the race."; subCls = "warn";
+  } else if (r.status === "upcoming") {
+    const when = new Date(r.startUtc).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    sub = `Starts ${until(r.startUtc)}`;
+    return rowHtml(cls, day, r, sub, subCls, act, extra, `${when} your time`);
+  } else if (r.status === "unavailable") {
+    sub = "F1 didn't publish data for this race."; subCls = "bad";
+  }
+  return rowHtml(cls, day, r, sub, subCls, act, extra, "");
+}
+
+function rowHtml(cls, day, r, sub, subCls, act, extra, tip) {
+  return `<div class="rc-row ${cls}" role="listitem"${tip ? ` title="${esc(tip)}"` : ""}>
+    <div class="rc-date"><span class="rc-day">${day.getDate()}</span><span class="rc-wd">${day.toLocaleString([], { weekday: "short" })}</span></div>
+    <div><div class="rc-name">${esc(r.name)}</div>${sub ? `<div class="rc-sub ${subCls}">${esc(sub)}</div>` : ""}</div>
+    <div class="rc-act">${act}</div>${extra}</div>`;
+}
+
+function renderChooser() {
+  const el = racePop(), d = chooser.data;
+  const active = document.activeElement;
+  const refocus = active && el.contains(active) && active.dataset.act
+    ? `[data-act="${active.dataset.act}"]${active.dataset.file ? `[data-file="${CSS.escape(active.dataset.file)}"]` : ""}${active.dataset.loc ? `[data-loc="${CSS.escape(active.dataset.loc)}"]` : ""}` : null;
+  const scroll = el.querySelector(".rc-list")?.scrollTop || 0;
+
+  let head = `<div class="rc-head"><h3>Choose a race</h3></div>`, body, note = "";
+  if (!d) {
+    body = `<div class="rc-empty">${esc(chooser.error || "Loading races…")}</div>`;
+  } else {
+    const series = [...new Set(d.races.map(r => r.series))];
+    if (!series.includes(chooser.tab)) chooser.tab = series[0];
+    if (series.length > 1) {
+      const label = { f1: "Formula 1", fe: "Formula E" };
+      head = `<div class="rc-head"><h3>Choose a race</h3><span class="seg">${series.map(s =>
+        `<button data-tab="${s}" class="${s === chooser.tab ? "on" : ""}">${label[s] || s}</button>`).join("")}</span></div>`;
+    }
+    const rows = d.races.filter(r => r.series === chooser.tab);
+    let month = "", html = "";
+    for (const r of rows) {
+      const m = new Date(r.date + "T12:00:00").toLocaleString("en", { month: "long", year: "numeric" });
+      if (m !== month) { month = m; html += `<h4 class="rc-month">${m}</h4>`; }
+      html += raceRow(r, d.build, d.canBuild);
+    }
+    body = rows.length ? `<div class="rc-list" role="list">${html}</div>`
+      : `<div class="rc-empty">No races yet. Build one with build_replay.py.</div>`;
+    if (chooser.error) note = `<div class="rc-note warn">${esc(chooser.error)}</div>`;
+    else if (!d.canBuild) note = `<div class="rc-note">Only the races included in this copy are listed.</div>`;
+    else if (!d.calendarOk) note = `<div class="rc-note warn">Couldn't reach F1's calendar, so only races on this computer are listed.</div>`;
+    else if (chooser.tab === "f1") note = `<div class="rc-note">Building uses F1's published data and takes about a minute.</div>`;
+  }
+  el.innerHTML = head + body + note;
+  const list = el.querySelector(".rc-list");
+  if (list) list.scrollTop = scroll;
+  if (refocus) el.querySelector(refocus)?.focus();
+}
+
+function onChooserClick(e) {
+  const t = e.target.closest("[data-act], [data-tab]");
+  if (!t || t.disabled) return;
+  if (t.dataset.tab) { chooser.tab = t.dataset.tab; renderChooser(); return; }
+  if (t.dataset.act === "watch") {
+    // remembered by the server, which opens this race the next time the page is opened with none chosen
+    document.cookie = `lastRace=${encodeURIComponent(t.dataset.file)}; path=/; max-age=31536000; SameSite=Lax`;
+    location.href = "/?data=" + encodeURIComponent(t.dataset.file);
+  } else if (t.dataset.act === "build") {
+    startBuild(+t.dataset.season, t.dataset.loc);
+  } else if (t.dataset.act === "details") {
+    chooser.details = !chooser.details;
+    renderChooser();
+  }
+}
+
+async function startBuild(season, loc) {
+  chooser.details = false;
+  try {
+    const r = await fetch("/api/build", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Replay": "1" },
+      body: JSON.stringify({ season, location: loc }),
+    });
+    const j = await r.json();
+    if (r.status === 409) chooser.data.build = j.build;
+    else if (!r.ok) { chooser.error = j.error || "Couldn't start the build."; renderChooser(); return; }
+    else chooser.data.build = j;
+    chooser.error = "";
+    renderChooser();
+    pollBuild();
+  } catch {
+    chooser.error = "Couldn't reach the replay server. Check that it's still running.";
+    renderChooser();
+  }
+}
+
+function pollBuild() {
+  clearInterval(chooser.poll);
+  chooser.poll = setInterval(async () => {
+    try {
+      const j = await (await fetch("/api/build", { cache: "no-store" })).json();
+      chooser.data.build = j.state === "idle" ? null : j;
+      if (j.state !== "running") { clearInterval(chooser.poll); await loadRaces(); }
+      renderChooser();
+    } catch { clearInterval(chooser.poll); }
+  }, 1500);
 }
 
 // ---------- clock / player ----------

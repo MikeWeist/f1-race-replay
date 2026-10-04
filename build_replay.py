@@ -4,6 +4,7 @@ Export a finished session into a JSON file the replay page can play back.
 Usage (from the repo root, with the venv's python):
     python build_replay.py                       # Baku 2026 race
     python build_replay.py 2026 Monza Race       # any season / meeting / session
+    python build_replay.py 2026 Monza Race --wait   # wait for F1 to publish complete data, then build
 
 Writes replay/data/<season>_<meeting>_<session>.json. Every timestamp in the
 file is milliseconds since the start of the session's data stream ("session ms").
@@ -12,6 +13,7 @@ import json
 import os
 import re
 import sys
+import time
 import warnings
 from datetime import datetime
 from urllib.parse import urljoin
@@ -19,6 +21,8 @@ from urllib.parse import urljoin
 import requests
 
 import livef1
+from outline import outline_from_positions
+from race_catalog import fetch_json as get_json
 
 warnings.filterwarnings("ignore")
 
@@ -271,6 +275,41 @@ def flatten_messages(entries, key, t0):
     return sorted(out, key=lambda m: m["t"])
 
 
+def wait_until_complete(season, meeting, session_name, poll_s=60, max_hours=12):
+    """Block until F1 has published a session and marked its archive complete.
+
+    Lets you start the build before the race and walk away: it checks the calendar every
+    minute (the data path only appears once the session is under way), then waits for the
+    archive to be marked complete, which is when the exporter's input is final.
+    """
+    wanted = meeting.lower()
+    deadline = time.time() + max_hours * 3600
+    last = None
+    while time.time() < deadline:
+        state = "waiting for the session to start"
+        try:
+            index = get_json(f"{STATIC_BASE}{season}/Index.json")
+            for m in index.get("Meetings", []):
+                if wanted in (m.get("Name") or "").lower() or wanted in (m.get("Location") or "").lower():
+                    s = next((s for s in m.get("Sessions", []) if s.get("Name") == session_name), None)
+                    if s and s.get("Path"):
+                        status = get_json(f"{STATIC_BASE}{s['Path']}ArchiveStatus.json").get("Status")
+                        if status == "Complete":
+                            print(f"{datetime.now():%H:%M:%S}  F1 has published the complete data.")
+                            return
+                        state = f"data is arriving (archive status: {status or 'unknown'})"
+                    break
+            else:
+                state = f"no meeting matching '{meeting}' in the {season} calendar yet"
+        except (OSError, ValueError) as e:
+            state = f"can't reach F1 ({type(e).__name__}); will retry"
+        if state != last:
+            print(f"{datetime.now():%H:%M:%S}  {state}")
+            last = state
+        time.sleep(poll_s)
+    sys.exit(f"Gave up after {max_hours} hours without complete data for {meeting} {session_name}.")
+
+
 def main(season=2026, meeting="Baku", session_name="Race"):
     print(f"Loading {season} {meeting} {session_name}...")
     session = livef1.get_session(season, meeting_identifier=meeting, session_identifier=session_name)
@@ -337,20 +376,28 @@ def main(season=2026, meeting="Baku", session_name="Race"):
         }
 
     print("Fetching circuit outline...")
-    circuit = session.meeting.circuit
-    circuit._load_circuit_data()
-    raw = circuit._raw_circuit_data
-    track = {
-        "x": raw["x"], "y": raw["y"], "rotation": raw.get("rotation", 0),
-        "corners": [
-            {"n": c["number"], "x": c["trackPosition"]["x"], "y": c["trackPosition"]["y"]}
-            for c in raw.get("corners", [])
-        ],
-    }
+    try:
+        circuit = session.meeting.circuit
+        circuit._load_circuit_data()
+        raw = circuit._raw_circuit_data
+        track = {
+            "x": raw["x"], "y": raw["y"], "rotation": raw.get("rotation", 0),
+            "corners": [
+                {"n": c["number"], "x": c["trackPosition"]["x"], "y": c["trackPosition"]["y"]}
+                for c in raw.get("corners", [])
+            ],
+        }
+    except Exception as e:  # noqa: BLE001 - the map service lacks new circuits; don't lose the whole replay
+        print(f"  no outline for this circuit ({e}); tracing it from where the cars drove instead")
+        traced = outline_from_positions(positions)
+        if traced is None:
+            print("  couldn't trace it either: the replay will have no track map")
+            traced = ([], [])
+        track = {"x": traced[0], "y": traced[1], "rotation": 0, "corners": [], "derived": True}
 
     print("Locating sectors on the track...")
     # timing offsets -> session ms are already the same clock as positions
-    track["sectors"] = locate_mini_sectors(raw_timing, positions, track)
+    track["sectors"] = locate_mini_sectors(raw_timing, positions, track) if track["x"] else None
     if track["sectors"]:
         print(f"  mini-sectors per sector: {track['sectors']['segments']}")
         # the last mini-sector ends at the timing line: that's the start/finish line
@@ -410,8 +457,12 @@ def main(season=2026, meeting="Baku", session_name="Race"):
 
 
 if __name__ == "__main__":
-    args = sys.argv[1:]
+    wait = "--wait" in sys.argv[1:]
+    args = [a for a in sys.argv[1:] if a != "--wait"]
     if args:
-        main(int(args[0]), args[1], args[2])
+        season, meeting, session_name = int(args[0]), args[1], args[2]
+        if wait:
+            wait_until_complete(season, meeting, session_name)
+        main(season, meeting, session_name)
     else:
         main()
