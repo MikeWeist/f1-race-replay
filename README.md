@@ -138,17 +138,34 @@ token: save the value of formula1.com's `login-session` cookie to `~/.f1tv_token
 Past races need no login. A login may matter for **live** data. `probe_live.py` shows what F1's
 live feed gives with and without one:
 
-1. Log in at formula1.com, open the browser's developer tools (F12), go to Application, Cookies,
-   `https://www.formula1.com`, and copy the value of the **`login-session`** cookie.
-2. Save it where no repo can pick it up (this reads the clipboard, so nothing is shown on screen):
+1. Log in at formula1.com, open the browser's developer tools (F12) and go to the **Console**. Run
+   this one line, which copies your `login-session` cookie to the clipboard (it sends nothing
+   anywhere; Chrome may ask you to type `allow pasting` first):
+
+   ```js
+   copy(document.cookie.split('; ').find(c => c.startsWith('login-session=')).slice(14))
+   ```
+
+   Don't copy the value out of the Application tab's cookie table instead: it **truncates long
+   values**, and a cut-off token can't log in (the tools tell you when that has happened).
+   (The Console prints `undefined` afterwards. That's normal: `copy()` always does.)
+2. Save it. This checks the clipboard first and only writes `~/.f1tv_token` (outside every repo) if
+   it holds a complete token, so a bad copy can't overwrite a good one. Nothing is shown on screen:
 
    ```bash
-   Get-Clipboard | Set-Content $HOME\.f1tv_token
+   python probe_live.py --save-token
    ```
 
 3. `python probe_live.py --token-info` checks it and shows its plan details (never the token).
 4. `python probe_live.py --minutes 120` runs through a live session, connecting with and without
    the token, and compares how much of each topic arrives.
+
+**What the login unlocks (checked 3 Oct 2026 with an active F1 TV Premium account):** F1's live
+feed accepts the token, and the only topics that differ are **`CarData.z`** (speed, throttle,
+brake, RPM, gear) and **`Position.z`** (car positions on track): they arrive with the login and
+are absent without it. Every other topic, including `TeamRadio`, is identical either way. Whether
+live *updates* of those two topics flow only to logged-in connections is what a live session
+confirms. Past races need neither: F1 publishes the same data publicly afterwards.
 
 The token is read from `~/.f1tv_token`, never from the repo; there is no `.env` file. It lasts
 about four days. The probe keeps only counts, never the token or any feed data.

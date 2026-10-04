@@ -131,8 +131,15 @@ def load_token():
         print("No F1 TV token found; connecting without login (F1 may withhold some data).")
         return None
     raw = open(TOKEN_FILE, encoding="utf-8").read().strip()
-    if raw.startswith("%7B") or raw.startswith("{"):
-        raw = json.loads(unquote(raw))["data"]["subscriptionToken"]
+    try:
+        if raw.startswith("%7B") or raw.startswith("{"):
+            raw = json.loads(unquote(raw))["data"]["subscriptionToken"]
+        if len(raw.split(".")) != 3:
+            raise ValueError("not a JWT")
+    except (ValueError, KeyError, TypeError):
+        print("The saved F1 TV token is incomplete: the text was cut off when it was copied. "
+              "Copy it again with the Console method in the README, then save it. Connecting without login.")
+        return None
 
     try:
         payload = raw.split(".")[1]

@@ -17,6 +17,7 @@ import asyncio
 import base64
 import json
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -36,17 +37,72 @@ TOPICS = [
 ]
 TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".f1tv_token")
 # claims that describe the plan, not the person
-PLAN_CLAIMS = ("subscriptionStatus", "subscribedProduct", "country", "iss", "aud")
+PLAN_CLAIMS = ("SubscriptionStatus", "SubscribedProduct", "ents", "iss", "aud")
+
+
+class TokenError(Exception):
+    pass
+
+
+CUT_OFF = ("The saved token is incomplete: the text was cut off when it was copied (DevTools truncates long "
+           "cookie values in its table). Copy it again with the Console method in the README, then save it.")
+
+
+def parse_token(raw):
+    """The JWT inside what was copied: the bare token or the whole login-session cookie."""
+    raw = raw.strip()
+    try:
+        if raw.startswith("%7B") or raw.startswith("{"):
+            raw = json.loads(unquote(raw))["data"]["subscriptionToken"]
+        if len(raw.split(".")) != 3:
+            raise ValueError("not a JWT")
+        claims_of(raw)  # the middle part must decode too
+    except (ValueError, KeyError, TypeError, IndexError):
+        raise TokenError(CUT_OFF) from None
+    return raw
 
 
 def read_token():
-    """The saved token, or None. Accepts the bare token or the whole login-session cookie."""
+    """The saved token, or None."""
     if not os.path.exists(TOKEN_FILE):
         return None
-    raw = open(TOKEN_FILE, encoding="utf-8").read().strip()
-    if raw.startswith("%7B") or raw.startswith("{"):
-        raw = json.loads(unquote(raw))["data"]["subscriptionToken"]
-    return raw
+    return parse_token(open(TOKEN_FILE, encoding="utf-8").read())
+
+
+def clipboard_text():
+    if sys.platform == "win32":
+        cmd = ["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"]
+    elif sys.platform == "darwin":
+        cmd = ["pbpaste"]
+    else:
+        cmd = ["xclip", "-selection", "clipboard", "-o"]
+    return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+
+
+def save_token():
+    """Check what's on the clipboard and, only if it's a complete token, save it."""
+    raw = clipboard_text()
+    if not raw:
+        print("The clipboard is empty. Copy the cookie first (see the README).")
+        return
+    try:
+        token = parse_token(raw)
+    except TokenError as e:
+        print(f"Not saved. {e}\nThe token already on disk, if any, was left alone.")
+        return
+    c = claims_of(token)
+    exp = datetime.fromtimestamp(c["exp"], timezone.utc)
+    if exp < datetime.now(timezone.utc):
+        print(f"Not saved: that token expired {exp:%Y-%m-%d %H:%M} UTC. Log in again and copy a fresh one.")
+        return
+    with open(TOKEN_FILE, "w", encoding="utf-8") as f:
+        f.write(raw.strip())
+    try:
+        os.chmod(TOKEN_FILE, 0o600)
+    except OSError:
+        pass
+    print(f"Saved to {TOKEN_FILE}. Valid until {exp:%Y-%m-%d %H:%M} UTC ({(exp - datetime.now(timezone.utc)).total_seconds() / 3600:.1f} h).")
+    print("Next: python probe_live.py --token-info")
 
 
 def claims_of(token):
@@ -55,7 +111,11 @@ def claims_of(token):
 
 
 def token_info():
-    token = read_token()
+    try:
+        token = read_token()
+    except TokenError as e:
+        print(e)
+        return
     if not token:
         print(f"No token yet. Save it to {TOKEN_FILE} (see the README).")
         return
@@ -63,11 +123,12 @@ def token_info():
     exp = datetime.fromtimestamp(c["exp"], timezone.utc)
     left = (exp - datetime.now(timezone.utc)).total_seconds() / 3600
     print(f"Token {'valid' if left > 0 else 'EXPIRED'}: expires {exp:%Y-%m-%d %H:%M} UTC ({left:.1f} h left)")
-    print("Claims it contains:", ", ".join(sorted(c)))
+    print("Plan details in it:")
     for k in PLAN_CLAIMS:
         if k in c:
             v = c[k]
-            print(f"  {k}: {v if not isinstance(v, str) or len(v) < 40 else v[:12] + '…'}")
+            text = json.dumps(v) if not isinstance(v, str) else v
+            print(f"  {k}: {text if len(text) < 80 else text[:76] + '…'}")
 
 
 class Lane:
@@ -112,15 +173,16 @@ class Lane:
 
 def table(lanes, final=False):
     names = [l.name for l in lanes]
-    out = [f"{'topic':<24}" + "".join(f"{n:>26}" for n in names)]
-    out.append(f"{'':<24}" + "".join(f"{'snapshot B | updates | first s':>26}" for _ in names))
+    w = 34
+    out = [f"{'topic':<24}" + "".join(f"{n:>{w}}" for n in names)]
+    out.append(f"{'':<24}" + "".join(f"{'state bytes | updates | first (s)':>{w}}" for _ in names))
     for topic in TOPICS:
         cells = []
         for l in lanes:
             t = l.topics.get(topic)
-            cells.append("-" if not t else f"{t['snap']:>8} | {t['n']:>6} | {t['first'] if t['first'] is not None else '-':>4}")
+            cells.append("-" if not t else f"{t['snap']:>11} | {t['n']:>7} | {t['first'] if t['first'] is not None else '-':>9}")
         if any(c != "-" for c in cells):
-            out.append(f"{topic:<24}" + "".join(f"{c:>26}" for c in cells))
+            out.append(f"{topic:<24}" + "".join(f"{c:>{w}}" for c in cells))
     out.append("status: " + "; ".join(f"{l.name}: {l.status} (connections: {l.connects})" for l in lanes))
     return "\n".join(out)
 
@@ -130,19 +192,27 @@ async def main():
     ap.add_argument("--minutes", type=float, default=2, help="how long to run (default 2)")
     ap.add_argument("--no-login", action="store_true", help="skip the connection that uses the token")
     ap.add_argument("--token-info", action="store_true", help="show the saved token's plan details and exit")
+    ap.add_argument("--save-token", action="store_true", help="save the token on the clipboard (checked first), then exit")
     args = ap.parse_args()
+    if args.save_token:
+        return save_token()
     if args.token_info:
         return token_info()
 
     lanes = [Lane("no login", None)]
-    token = None if args.no_login else read_token()
+    token_problem = False
+    try:
+        token = None if args.no_login else read_token()
+    except TokenError as e:
+        print(f"{e}\nRunning the no-login connection only.")
+        token, token_problem = None, True
     if token:
         c = claims_of(token)
         if c["exp"] < time.time():
             print("The saved token has expired; log in again and re-save it. Running without it.")
         else:
             lanes.append(Lane("with F1 TV login", token))
-    elif not args.no_login:
+    elif not args.no_login and not token_problem:
         print(f"No token at {TOKEN_FILE}: running the no-login connection only.")
 
     stop = asyncio.Event()
