@@ -51,6 +51,42 @@ without knowing the result.
 | Esc | close driver cards |
 | Top bar | track sector overlay, units, tyre strategy, championship |
 
+## Formula E (past races)
+
+Formula E's live timing feed keeps the latest event's sessions and serves each one by ID, so a
+finished race can be replayed even if you never recorded it live:
+
+```bash
+.venv\Scripts\python build_fe_replay.py --list      # the sessions the feed currently stores
+.venv\Scripts\python build_fe_replay.py             # the Race of the latest event
+```
+
+Then open `http://localhost:8765/?data=data/fe_2026_london_race.json` (the script prints the
+exact address).
+
+**You get:** the timing tower, rebuilt from every sector crossing (positions, gaps, intervals,
+sector and lap colours, personal bests, pit stops), Attack Mode, race control, the circuit, and
+car positions.
+
+**You don't get:** commentary, team radio, car telemetry or tyres (Formula E publishes none).
+
+**Car positions are estimates.** The stored data has sector times, not tracking, so each car is
+placed by how far through its current sector it is (the page says so). Everything else is the
+recorded data: for the London E-Prix the rebuilt final order, lap counts and fastest lap match
+the official classification.
+
+**Limits:** the feed only lists the most recent event; only races are supported; the feed is
+unofficial and can change without notice. `fe_feed.py` drops the API token that the feed
+publishes the moment it arrives, so it is never stored or used. Downloads are cached in
+`fe_cache/` (not committed).
+
+## Tests
+
+```bash
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\python -m pytest tests
+```
+
 ## Share it
 
 ```bash
@@ -83,6 +119,9 @@ token: save the value of formula1.com's `login-session` cookie to `~/.f1tv_token
 - **`replay_server.py`** serves the page and relays the commentary audio, because
   F1's servers don't allow a web page to load it directly.
 - **`replay/index.html`** replays every stream against the commentary's clock.
+- **`fe_feed.py`**, **`fe_convert.py`** and **`build_fe_replay.py`** do the same for Formula E:
+  fetch a stored session, rebuild the timeline from its lap records, and write the same replay
+  format (the page switches to a Formula E profile).
 
 ## Credits
 
@@ -93,6 +132,7 @@ token: save the value of formula1.com's `login-session` cookie to `~/.f1tv_token
   the SignalR Core live timing connection
 - [MultiViewer](https://multiviewer.app): circuit outlines and corner positions
 - Formula 1: all timing data, audio and media
+- Formula E and Al Kamel Systems: the live timing data behind the Formula E replays
 
 ## License
 

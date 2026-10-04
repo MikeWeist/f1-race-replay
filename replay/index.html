@@ -282,6 +282,19 @@
   .ch-head { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; cursor: default; height: 20px; }
   .ch-head:hover { background: none; }
 
+  /* ---------- Formula E replays: no commentary, telemetry, radio, tyres or championship panel ---------- */
+  body.fe { --tower-w: 304px; }
+  body.fe .top-btns, body.fe #tower-secs, body.fe #track-mode [data-mode="mini"],
+  body.fe #radio-head, body.fe #radio, body.fe #blue-note, body.fe .c-compare { display: none; }
+  body.fe .row { grid-template-columns: 22px 4px 36px 30px 64px 50px 22px 18px; }
+  body.fe .row .logo { display: none; }
+  #map-note { display: none; position: absolute; left: 12px; bottom: 12px; padding: 4px 8px; border-radius: 4px;
+    font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent);
+    border: 1px solid var(--line); }
+  body.fe #map-note { display: block; }
+  .row .flag .fl.atk { background: var(--yellow); color: #111; }
+  .c-badge.atk { background: var(--yellow); color: #111; }
+
   @media (max-width: 1200px) {
     main, body.feeds-collapsed main { grid-template-columns: var(--tower-w) 1fr; }
     #feeds { display: none; }
@@ -328,18 +341,19 @@
     <canvas id="map"></canvas>
     <div id="card" role="dialog" aria-label="Driver details"></div>
     <div id="map-legend"></div>
+    <div id="map-note">Car positions are estimated from sector times</div>
     <div id="panel" role="dialog"></div>
     <div id="loading">Loading race data…</div>
   </section>
 
   <section id="feeds">
     <button id="feeds-rail" title="Show race control & team radio">
-      <span>‹</span><span class="rail-new" id="rail-new"></span><span class="rail-label">Race control &amp; radio</span>
+      <span>‹</span><span class="rail-new" id="rail-new"></span><span class="rail-label" id="rail-label">Race control &amp; radio</span>
     </button>
     <div class="panel-head"><span><button class="collapse-btn" id="feeds-collapse" title="Hide race control & team radio">›</button>Race control</span>
-      <label class="note"><input type="checkbox" id="show-blue"> blue flags</label></div>
+      <label class="note" id="blue-note"><input type="checkbox" id="show-blue"> blue flags</label></div>
     <div class="feed" id="rc"></div>
-    <div class="panel-head"><span>Team radio</span>
+    <div class="panel-head" id="radio-head"><span>Team radio</span>
       <label class="note"><input type="checkbox" id="auto-radio" checked> auto-play</label></div>
     <div class="feed" id="radio"></div>
   </section>
@@ -377,6 +391,7 @@ const TYRES = {
   INTERMEDIATE: ["#43b02a", "I"], WET: ["#0067ad", "W"], UNKNOWN: ["#666", "?"],
 };
 const STOPWATCH = `<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="9.2" r="5.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 9.2V6.6M6.3 1.9h3.4M8 1.9v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const BOLT = `<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M9.5 1L3 9.2h4.2L6.3 15 13 6.6H8.7z" fill="currentColor"/></svg>`;
 const TRACK_STATUS = {
   "1": "Track clear", "2": "Yellow flag", "4": "Safety car", "5": "Red flag",
   "6": "Virtual safety car", "7": "VSC ending",
@@ -427,6 +442,7 @@ function raceClock(ms) {
 // F1's white team logos: common/f1/<season>/<slug>/<season><slug>logowhite.webp, where slug is
 // the team name lower-cased with everything but letters/digits removed ("Haas F1 Team" -> haasf1team)
 function teamLogo(teamName) {
+  if (FE) return "";
   const slug = String(teamName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const y = D.meta.season;
   return slug ? `https://media.formula1.com/image/upload/c_lfill,w_48/q_auto/v1740000001/common/f1/${y}/${slug}/${y}${slug}logowhite.webp` : "";
@@ -437,6 +453,7 @@ function teamLogo(teamName) {
 // common/f1/<season>/<team slug>/<ref>/<season><team slug><ref>right.webp: a full-length
 // portrait, so ask the image server for a face-centred square crop.
 function driverPhotos(d) {
+  if (FE) return [];
   const team = String(d.TeamName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const ref = String(d.Reference || "").toLowerCase();
   const y = D.meta.season;
@@ -472,7 +489,9 @@ function setUnits(kind, value) {
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // ---------- app ----------
-let D, streams, drivers = {}, raceStart = 0, gapMode = "int", selected = store.get("sel", null);
+// selections are remembered per replay, so an F1 pick doesn't open a Formula E card
+let D, streams, drivers = {}, raceStart = 0, gapMode = "int", selected = store.get("sel:" + DATA_URL, null);
+let FE = false;  // Formula E replay: no commentary, telemetry, radio, tyres or championship panel
 let T = 0, lastPanelUpdate = 0, lastPanelT = -1;
 
 async function main() {
@@ -481,8 +500,18 @@ async function main() {
   D = await res.json();
   $("#loading").remove();
 
+  FE = D.meta.series === "fe";
+  document.body.classList.toggle("fe", FE);
+  if (FE) {
+    panelMode = null;                       // no strategy / championship panels
+    TRACK_STATUS["6"] = "Full course yellow";
+    $("#rail-label").textContent = "Race control";
+    $("#feeds-rail").title = "Show race control";
+    $("#feeds-collapse").title = "Hide race control";
+  }
+
   $("#t-meeting").textContent = D.meta.meeting;
-  $("#t-session").textContent = `${D.meta.season} · ${D.meta.session} · spoiler-free replay`;
+  $("#t-session").textContent = D.meta.subtitle || `${D.meta.season} · ${D.meta.session} · spoiler-free replay`;
   document.title = `${D.meta.meeting} replay`;
 
   streams = {};
@@ -498,10 +527,12 @@ async function main() {
   setupControls();
   requestAnimationFrame(frame);
 
-  fetch(DATA_URL.replace(/\.json$/, "_car.json"))
-    .then(r => r.ok ? r.json() : null)
-    .then(j => { CAR = j; })
-    .catch(() => {});
+  if (!FE) {
+    fetch(DATA_URL.replace(/\.json$/, "_car.json"))
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { CAR = j; })
+      .catch(() => {});
+  }
 }
 
 // ---------- clock / player ----------
@@ -928,6 +959,7 @@ function updateLegend() {
 }
 
 function setTrackMode(mode) {
+  if (FE && mode === "mini") mode = "sectors";  // Formula E has three sectors and no mini-sectors
   trackMode = D.track.sectors ? mode : "off";
   store.set("trackMode", trackMode);
   document.querySelectorAll("#track-mode button").forEach(b => b.classList.toggle("on", b.dataset.mode === trackMode));
@@ -1020,6 +1052,7 @@ function updateTower(T) {
   const timing = streams.TimingData.at(T).Lines || {};
   const app = streams.TimingAppData.at(T).Lines || {};
   const stats = streams.TimingStats.at(T).Lines || {};
+  const attackLines = streams.AttackMode?.at(T).Lines || {};
   const list = streams.DriverList.at(T);
   for (const [num, d] of Object.entries(list)) if (d && typeof d === "object") drivers[num] = { ...drivers[num], ...d };
 
@@ -1054,19 +1087,23 @@ function updateTower(T) {
       logo.dataset.team = d.TeamName || "";
       logo.style.visibility = "visible";
       logo.onerror = () => { logo.style.visibility = "hidden"; };
-      logo.src = teamLogo(d.TeamName);
+      const logoSrc = teamLogo(d.TeamName);
+      if (logoSrc) logo.src = logoSrc; else logo.style.visibility = "hidden";
       logo.title = d.TeamName || "";
     }
 
     const flag = row.querySelector(".flag");
     const pitFlag = out ? "RET" : tl.InPit ? "PIT" : tl.PitOut ? "EXIT" : "";
+    // Attack Mode (Formula E): a bolt while it's active, ahead of the fastest-lap badge
+    const attack = !pitFlag && !!attackLines[num]?.Active;
     // fastest lap of the race so far: whoever's personal best ranks P1 (pit/retired badges win)
-    const fastest = !pitFlag && T >= raceStart && +stats[num]?.PersonalBestLapTime?.Position === 1;
-    if (flag.dataset.v !== pitFlag + fastest) {
-      flag.dataset.v = pitFlag + fastest;
-      flag.innerHTML = fastest ? `<span class="fl">${STOPWATCH}</span>` : pitFlag;
+    const fastest = !pitFlag && !attack && T >= raceStart && +stats[num]?.PersonalBestLapTime?.Position === 1;
+    if (flag.dataset.v !== pitFlag + attack + fastest) {
+      flag.dataset.v = pitFlag + attack + fastest;
+      flag.innerHTML = attack ? `<span class="fl atk">${BOLT}</span>` : fastest ? `<span class="fl">${STOPWATCH}</span>` : pitFlag;
     }
     flag.title = out ? "Retired" : tl.InPit ? "In the pit lane" : tl.PitOut ? "Leaving the pits"
+      : attack ? `Attack Mode active (activation ${attackLines[num].Used})`
       : fastest ? `Fastest lap: ${stats[num].PersonalBestLapTime.Value}` : "";
     flag.classList.toggle("pit", !out && (tl.InPit || tl.PitOut));
 
@@ -1105,7 +1142,7 @@ function miniCounts() {
 }
 
 function setTowerSecs(mode) {
-  towerSecs = mode === "minis" && miniCounts() ? "minis" : "sectors";
+  towerSecs = mode === "minis" && miniCounts() && !FE ? "minis" : "sectors";
   store.set("towerSecs", towerSecs);
   $("#tower").classList.toggle("minis", towerSecs === "minis");
   document.body.classList.toggle("tower-minis", towerSecs === "minis");
@@ -1356,13 +1393,13 @@ function updatePanel(T) {
 // ---------- driver card ----------
 let CAR = null;  // telemetry, loaded in the background
 // Up to two drivers: `selected` (full card, or top card when comparing) and `compareNum`.
-let compareNum = store.get("sel2", null), pickCompare = false;
+let compareNum = store.get("sel2:" + DATA_URL, null), pickCompare = false;
 const card = { el: null, key: null, cards: [] };  // cards: [{ num, el, parts, compact }]
 const isSelected = n => n != null && (n === selected || n === compareNum);
 
 function saveSelection() {
-  store.set("sel", selected);
-  store.set("sel2", compareNum);
+  store.set("sel:" + DATA_URL, selected);
+  store.set("sel2:" + DATA_URL, compareNum);
   lastPanelT = -1;
   buildCard();
 }
@@ -1370,6 +1407,7 @@ function saveSelection() {
 // add = shift/ctrl-click, or the card's Compare button was pressed first
 function selectDriver(num, add = false) {
   if (!num) return;
+  if (FE) { add = false; pickCompare = false; }  // comparing is telemetry-based; Formula E has none
   if ((add || pickCompare) && selected && num !== selected) {
     compareNum = compareNum === num ? null : num;
   } else if (compareNum) {
@@ -1445,7 +1483,7 @@ function cardHtml(d, compact) {
         <small>${d.TeamName ? `<img class="c-logo" alt="" src="${esc(teamLogo(d.TeamName))}" onerror="this.remove()">` : ""}${esc(d.TeamName || "")}</small><span data-p="badge"></span></div>
     </div>
     <div class="c-sec"><div class="c-grid" data-p="race"></div></div>
-    <div class="c-sec"><h4>Live telemetry</h4>
+    ${FE ? "" : `<div class="c-sec"><h4>Live telemetry</h4>
       <div class="tel">
         <div class="tel-big"><b data-p="speed">–</b><small>${speedUnit()}</small><div class="tel-gear" data-p="gear">–</div><small>gear</small></div>
         <div>
@@ -1457,13 +1495,13 @@ function cardHtml(d, compact) {
       <canvas class="trace" data-p="trace"></canvas>
       <div class="legend"><span><i style="background:#fff"></i>Speed</span><span><i style="background:var(--green)"></i>Throttle</span>
         <span><i style="background:var(--red);opacity:.6"></i>Braking</span><span style="margin-left:auto">last ${TRACE_MS / 1000}s</span></div>
-    </div>
+    </div>`}
     ${compact ? "" : `
     <div class="c-sec"><h4>Lap &amp; sectors</h4><div class="c-grid" data-p="laps"></div></div>
-    <div class="c-sec"><h4>Speed traps (${speedUnit()})</h4><div class="c-grid four" data-p="speeds"></div></div>
-    <div class="c-sec"><h4>Tyres</h4><div data-p="tyres"></div></div>
+    ${FE ? "" : `<div class="c-sec"><h4>Speed traps (${speedUnit()})</h4><div class="c-grid four" data-p="speeds"></div></div>
+    <div class="c-sec"><h4>Tyres</h4><div data-p="tyres"></div></div>`}
     <div class="c-sec"><h4>Pit stops</h4><div class="c-list" data-p="pits"></div></div>
-    <div class="c-sec"><h4>Team radio</h4><div class="c-radio" data-p="radio"></div></div>`}
+    ${FE ? "" : `<div class="c-sec"><h4>Team radio</h4><div class="c-radio" data-p="radio"></div></div>`}`}
   </div>`;
 }
 
@@ -1483,8 +1521,9 @@ function fillCard({ num, parts: P, compact }, T) {
   const st = (streams.TimingStats.at(T).Lines || {})[num] || {};
 
   const out = tl.Retired || tl.Stopped;
+  const atk = streams.AttackMode?.at(T).Lines?.[num] || {};
   P.badge.innerHTML = out ? `<span class="c-badge out">OUT</span>` : tl.InPit ? `<span class="c-badge">IN PIT</span>`
-    : tl.PitOut ? `<span class="c-badge">PIT EXIT</span>` : "";
+    : tl.PitOut ? `<span class="c-badge">PIT EXIT</span>` : atk.Active ? `<span class="c-badge atk">ATTACK MODE</span>` : "";
 
   const pos = +tl.Position || null, grid = +app.GridPos || null;
   const moved = pos && grid && T >= raceStart ? grid - pos : 0;
@@ -1495,7 +1534,8 @@ function fillCard({ num, parts: P, compact }, T) {
     stat("Laps", tl.NumberOfLaps ?? 0) +
     stat("Gap to leader", pos === 1 ? "—" : tl.GapToLeader || "–") +
     stat("Interval", pos === 1 ? "—" : tl.IntervalToPositionAhead?.Value || "–") +
-    stat("Pit stops", tl.NumberOfPitStops ?? 0);
+    stat("Pit stops", tl.NumberOfPitStops ?? 0) +
+    (FE ? stat("Attack Mode", atk.Used ? `${atk.Used} used${atk.Active ? " · on" : ""}` : "none yet") : "");
   if (compact) return;
 
   const sec = i => tl.Sectors?.[i] || {};
@@ -1512,7 +1552,7 @@ function fillCard({ num, parts: P, compact }, T) {
     ).join("") +
     [0, 1, 2].map(i => stat(`Best S${i + 1}`, pbSec(i).Value || "–", "", nth(pbSec(i).Position))).join("");
 
-  P.speeds.innerHTML = ["I1", "I2", "FL", "ST"].map(k => {
+  if (P.speeds) P.speeds.innerHTML = ["I1", "I2", "FL", "ST"].map(k => {
     const cur = tl.Speeds?.[k], best = st.BestSpeeds?.[k];
     return stat(k === "ST" ? "Trap" : k === "FL" ? "Finish" : k, cur?.Value ? speedOut(cur.Value) : "–", fastCls(cur),
       best?.Value ? `best ${speedOut(best.Value)} ${nth(best.Position)}` : "");
@@ -1520,7 +1560,7 @@ function fillCard({ num, parts: P, compact }, T) {
 
   const stints = Array.isArray(app.Stints) ? app.Stints : app.Stints ? Object.values(app.Stints) : [];
   const total = stints.reduce((a, s) => a + (s.TotalLaps || 0), 0) || 1;
-  P.tyres.innerHTML = stints.length ? `<div class="stints">${stints.map((s, i) => {
+  if (P.tyres) P.tyres.innerHTML = stints.length ? `<div class="stints">${stints.map((s, i) => {
     const [col, letter] = TYRES[s.Compound] || TYRES.UNKNOWN;
     return `<div class="stint" style="background:${col};flex:${Math.max(s.TotalLaps || 0, 1)}"
       title="Stint ${i + 1}: ${esc(s.Compound)}${s.New === "true" ? " (new)" : " (used)"}, ${s.TotalLaps ?? 0} laps">${letter} ${s.TotalLaps ?? 0}</div>`;
@@ -1528,9 +1568,12 @@ function fillCard({ num, parts: P, compact }, T) {
 
   const pits = D.pitStops.filter(p => p.num === num && p.t <= T);
   P.pits.innerHTML = pits.length
-    ? pits.map(p => `<div><span>Lap ${esc(p.lap)}</span>stationary ${esc(p.stop || "–")}s · lane ${esc(p.lane || "–")}s</div>`).join("")
+    ? pits.map(p => FE
+      ? `<div><span>Lap ${esc(p.lap)}</span>${esc(p.stop || "–")}s in the pits</div>`
+      : `<div><span>Lap ${esc(p.lap)}</span>stationary ${esc(p.stop || "–")}s · lane ${esc(p.lane || "–")}s</div>`).join("")
     : `<div class="c-empty">None yet.</div>`;
 
+  if (!P.radio) return;
   const clips = D.radio.filter(c => c.RacingNumber === num && c.t <= T);
   const key = clips.length + ":" + (playingClip?.url || "");
   if (P.radio.dataset.key !== key) {
@@ -1610,6 +1653,7 @@ function updateTelemetry(T) {
 }
 
 function fillTelemetry(P, c, T) {
+  if (!P.trace) return;  // Formula E cards have no telemetry section
   drawTrace(P.trace, c, T);
   let i = -1;
   if (c) {

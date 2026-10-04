@@ -35,5 +35,13 @@ and related marks are trade marks of Formula One Licensing B.V.
   logos** are the property of Formula One Management and the teams. They are fetched
   from Formula 1's servers at runtime and are not included in this repository. Exported
   race data (`replay/data/`) is for personal use and is not committed.
+- **Formula E timing data** (lap and sector times, results, race control messages, circuit
+  outlines) belongs to Formula E and its timing provider Al Kamel Systems. It is read from the
+  live timing feed that Formula E's own timing page uses, at runtime, for personal use, and is
+  not included in this repository (`fe_cache/` and `replay/data/` are not committed). Al Kamel's
+  results page states "Copyright 2023 © All rights reserved"; do not redistribute downloaded
+  data. This project is not affiliated with Formula E, the ABB FIA Formula E World
+  Championship or Al Kamel Systems. The feed also publishes an API token in its registry
+  document; `fe_feed.py` discards it on arrival and never uses or stores it.
 - **Circuit outlines and corner positions** come from the MultiViewer API
   (https://multiviewer.app), fetched at runtime via LiveF1.

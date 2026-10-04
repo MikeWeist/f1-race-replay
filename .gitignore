@@ -9,3 +9,6 @@ replay/data/
 
 # Built share packages (package_replay.py)
 dist/
+
+# Downloaded Formula E sessions (build_fe_replay.py cache)
+fe_cache/
