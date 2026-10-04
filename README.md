@@ -64,6 +64,29 @@ Opening the page with no race chosen opens the last one you picked, or the newes
 In the shared zip the list shows only the races inside it. If a circuit isn't in the outline
 service LiveF1 uses (new circuits often aren't), the exporter traces it from where the cars drove.
 
+### Moments and the Director
+
+Under the timeline, a strip marks the moments worth a glance, **only the ones that have already
+happened**, so it never spoils what's coming. Hover one to read it, click to jump to just before it, or
+Tab to the strip and use the arrow keys and Enter.
+
+| Mark | Moment |
+|---|---|
+| Diamond | Overtake in the top ten, or a lead change |
+| Amber dot | Battle: within a second of the car ahead for a couple of laps |
+| Purple dot | New fastest lap |
+| Grey dot | Pit stop |
+| Green dot | Team radio |
+| Bar | Safety car, VSC, red flag, penalty or investigation, retirement, restart |
+
+Taller marks mattered more. The weights live in one table at the top of `replay/moments.js`.
+
+**Director** (button in the footer, or `D`) is off by default and remembers your choice. When it's on, the
+cars in the most interesting moment get a cyan ring on the map and a cyan edge in the timing tower, and a
+caption says what's happening ("Verstappen takes the lead from Antonelli"); a **Compare** button on the
+caption opens those two drivers' cards side by side. It holds each focus for at least 12 seconds, and
+picking a driver yourself pauses it for a minute.
+
 ### Controls
 
 | | |
@@ -120,6 +143,21 @@ publishes the moment it arrives, so it is never stored or used. Downloads are ca
 Builds `dist/F1-Race-Replay.zip` with the page, your exported races, the server and
 double-click launchers for Windows and macOS. The person receiving it only needs
 Python 3 installed.
+
+## Recording live sessions
+
+```bash
+.venv\Scripts\python record_live.py
+```
+
+Leave it running. It connects to F1's live feed (using your saved F1 TV token, if any, which is what
+makes F1 send car positions and telemetry) and writes every message to `recordings/<session>.jsonl`,
+starting a new file whenever F1 moves to a new session. A session that was already over when it started
+isn't recorded, and it reconnects on its own if the connection drops. About 10-20 MB per race. The files
+are the raw feed, so a recorded session can later be turned into a replay with the telemetry F1 never
+publishes afterwards. Only one recorder runs at a time; `recordings/` is not committed.
+
+The token lasts about four days: before a race weekend, re-save it (see below) and restart the recorder.
 
 ## Team radio during a live session
 
@@ -180,6 +218,10 @@ about four days. The probe keeps only counts, never the token or any feed data.
 - **`replay_server.py`** serves the page and relays the commentary audio, because
   F1's servers don't allow a web page to load it directly.
 - **`replay/index.html`** replays every stream against the commentary's clock.
+- **`replay/moments.js`** finds the moments (overtakes, battles, pit stops, flags, penalties) by walking
+  the timing updates in order, and picks what the Director focuses on. No page code in it, so
+  `tests/test_moments.py` runs the same file under node.
+- **`record_live.py`** is the live recorder.
 - **`fe_feed.py`**, **`fe_convert.py`** and **`build_fe_replay.py`** do the same for Formula E:
   fetch a stored session, rebuild the timeline from its lap records, and write the same replay
   format (the page switches to a Formula E profile).

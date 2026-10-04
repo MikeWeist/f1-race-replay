@@ -21,3 +21,5 @@ fe_cache/
 
 # Output of probe_live.py (counts only)
 probe_live_*.json
+
+recordings/

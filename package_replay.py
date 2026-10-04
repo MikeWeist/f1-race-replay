@@ -108,7 +108,8 @@ def main(only=None):
         for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
             if os.path.exists(os.path.join(HERE, name)):
                 z.write(os.path.join(HERE, name), TOP + name)
-        z.write(os.path.join(HERE, "replay", "index.html"), TOP + "replay/index.html")
+        for name in ("index.html", "moments.js"):
+            z.write(os.path.join(HERE, "replay", name), TOP + "replay/" + name)
         for name in exports:
             for suffix in (".json", "_car.json"):
                 path = os.path.join(DATA, name + suffix)
