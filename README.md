@@ -198,12 +198,13 @@ live feed gives with and without one:
 4. `python probe_live.py --minutes 120` runs through a live session, connecting with and without
    the token, and compares how much of each topic arrives.
 
-**What the login unlocks (checked 3 Oct 2026 with an active F1 TV Premium account):** F1's live
-feed accepts the token, and the only topics that differ are **`CarData.z`** (speed, throttle,
-brake, RPM, gear) and **`Position.z`** (car positions on track): they arrive with the login and
-are absent without it. Every other topic, including `TeamRadio`, is identical either way. Whether
-live *updates* of those two topics flow only to logged-in connections is what a live session
-confirms. Past races need neither: F1 publishes the same data publicly afterwards.
+**What the login unlocks (measured through the 4 Oct 2026 Bahrain race with an active F1 TV Premium
+account):** F1's live feed accepts the token, and four topics reach only logged-in connections:
+**`CarData.z`** (speed, throttle, brake, RPM, gear), **`Position.z`** (car positions on track),
+**`DriverRaceInfo`** (running order, gaps, and an `OvertakeState` value per car) and
+**`ChampionshipPrediction`**. Every other topic, including `TeamRadio`, is identical either way.
+(Checking only the state F1 sends on connect misses the last two; they differ in the live updates.)
+Past races need neither: F1 publishes all of these publicly afterwards.
 
 The token is read from `~/.f1tv_token`, never from the repo; there is no `.env` file. It lasts
 about four days. The probe keeps only counts, never the token or any feed data.

@@ -14,10 +14,15 @@ During the Bahrain race, with and without an F1 TV login, side by side (`probe_l
 |---|---|---|
 | `CarData.z` (speed, throttle, brake, RPM, gear) | none | ~9,000 updates, 5.5 MB per 2.5 h |
 | `Position.z` (car x/y) | none | ~9,000 updates, 6.7 MB per 2.5 h |
+| `DriverRaceInfo` (gaps plus `OvertakeState`, 0/1/2 per car; ~9,700 updates) | none | full |
+| `ChampionshipPrediction` | none | 57 updates |
 | `TimingData` (~22,000 updates), `TeamRadio`, `RaceControlMessages`, `TimingAppData`, `TrackStatus`, `LapCount`, `WeatherData`, `DriverList`, `SessionStatus` | full | identical |
 | `DriverTracker` | only running order (`Lines: [{Position, RacingNumber}]`) | same |
 
-So the login unlocks exactly two things: **where the cars are** and **what the cars are doing**.
+So the login unlocks four live topics: **where the cars are**, **what the cars are doing**, the
+overtake state per car, and the championship projection. (The first version of this note said two: it
+had only compared the connect-time snapshots.) The overtake state and the championship projection are
+also in F1's public archive afterwards, so replays already have them.
 It does not unlock video or commentary audio (those are F1 TV's separate player service, out of scope).
 Everything else needed for a good live page is public.
 
