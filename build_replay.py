@@ -23,6 +23,7 @@ import requests
 import livef1
 from outline import outline_from_positions
 from race_catalog import fetch_json as get_json
+from token_source import authorize_requests
 
 warnings.filterwarnings("ignore")
 
@@ -310,9 +311,29 @@ def wait_until_complete(season, meeting, session_name, poll_s=60, max_hours=12):
     sys.exit(f"Gave up after {max_hours} hours without complete data for {meeting} {session_name}.")
 
 
+def meeting_key(season, meeting):
+    """F1's key for a meeting whose name or location is exactly `meeting`, else None.
+
+    livef1's fuzzy match doesn't search locations, so "Marina Bay" lands on Yas Marina (Abu Dhabi).
+    """
+    want = meeting.strip().casefold()
+    try:
+        index = get_json(f"{STATIC_BASE}{season}/Index.json")
+    except (OSError, ValueError):
+        return None
+    for m in index.get("Meetings", []):
+        if want in ((m.get("Name") or "").casefold(), (m.get("Location") or "").casefold()):
+            return m.get("Key")
+    return None
+
+
 def main(season=2026, meeting="Baku", session_name="Race"):
     print(f"Loading {season} {meeting} {session_name}...")
-    session = livef1.get_session(season, meeting_identifier=meeting, session_identifier=session_name)
+    key = meeting_key(season, meeting)
+    if key:
+        session = livef1.get_session(season, meeting_key=key, session_identifier=session_name)
+    else:
+        session = livef1.get_session(season, meeting_identifier=meeting, session_identifier=session_name)
     session_url = urljoin(STATIC_BASE, session.path)
 
     # t0: the wall-clock time of stream offset 0, derived from Heartbeat (offset, Utc) pairs
@@ -457,6 +478,8 @@ def main(season=2026, meeting="Baku", session_name="Race"):
 
 
 if __name__ == "__main__":
+    if not authorize_requests():
+        print("No F1 TV token saved: F1's archive refuses requests without one (see the README).")
     wait = "--wait" in sys.argv[1:]
     args = [a for a in sys.argv[1:] if a != "--wait"]
     if args:

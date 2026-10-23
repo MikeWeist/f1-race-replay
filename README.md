@@ -20,7 +20,8 @@ python -m venv .venv
 
 ## Watch a race
 
-1. **Export it** (downloads F1's timing data; a race takes about a minute):
+1. **Export it** (downloads F1's timing data, which needs a saved [F1 TV login](#f1-tv-login);
+   a race takes about a minute):
 
    ```bash
    .venv\Scripts\python build_replay.py 2026 Baku Race
@@ -168,12 +169,15 @@ The token lasts about four days: before a race weekend, re-save it (see below) a
 ```
 
 `live` works without logging in. With an F1 TV subscription it can also send your
-token: save the value of formula1.com's `login-session` cookie to `~/.f1tv_token`
-(outside the repo, so it can't be committed).
+token: save the value of formula1.com's `login-session` cookie as `F1TV_TOKEN=` in the
+project's `.env` (git-ignored, so it can't be committed), or in `~/.f1tv_token`.
 
-## F1 TV login (optional)
+## F1 TV login
 
-Past races need no login. A login may matter for **live** data. `probe_live.py` shows what F1's
+**Exporting past races needs one.** Since October 2026 F1's archive
+(`livetiming.formula1.com/static/`) answers `401 Unauthorized` without a login; it accepts the
+token sent as `Authorization: Bearer <token>`, which every script that reads the archive does
+for you once it's saved. A login also matters for **live** data. `probe_live.py` shows what F1's
 live feed gives with and without one:
 
 1. Log in at formula1.com, open the browser's developer tools (F12) and go to the **Console**. Run
@@ -187,8 +191,9 @@ live feed gives with and without one:
    Don't copy the value out of the Application tab's cookie table instead: it **truncates long
    values**, and a cut-off token can't log in (the tools tell you when that has happened).
    (The Console prints `undefined` afterwards. That's normal: `copy()` always does.)
-2. Save it. This checks the clipboard first and only writes `~/.f1tv_token` (outside every repo) if
-   it holds a complete token, so a bad copy can't overwrite a good one. Nothing is shown on screen:
+2. Save it. This checks the clipboard first and only writes `F1TV_TOKEN` in the project's `.env`
+   (git-ignored) if it holds a complete token, so a bad copy can't overwrite a good one. Nothing is
+   shown on screen:
 
    ```bash
    python probe_live.py --save-token
@@ -204,10 +209,10 @@ account):** F1's live feed accepts the token, and four topics reach only logged-
 **`DriverRaceInfo`** (running order, gaps, and an `OvertakeState` value per car) and
 **`ChampionshipPrediction`**. Every other topic, including `TeamRadio`, is identical either way.
 (Checking only the state F1 sends on connect misses the last two; they differ in the live updates.)
-Past races need neither: F1 publishes all of these publicly afterwards.
+F1 publishes all of these in the archive afterwards, behind the same login.
 
-The token is read from `~/.f1tv_token`, never from the repo; there is no `.env` file. It lasts
-about four days. The probe keeps only counts, never the token or any feed data.
+The token is read from `F1TV_TOKEN` in `.env` (git-ignored, never committed), falling back to
+`~/.f1tv_token`. It lasts about four days. The probe keeps only counts, never the token or any feed data.
 
 ## How it works
 

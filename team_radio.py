@@ -25,6 +25,8 @@ from urllib.parse import unquote, urljoin
 
 import requests
 
+from token_source import authorize_requests, raw_token
+
 STATIC_BASE = "https://livetiming.formula1.com/static/"
 DEFAULT_SESSION = "2026/2026-09-26_Azerbaijan_Grand_Prix/2026-09-26_Race/"
 CLIP_DIR = os.path.join(tempfile.gettempdir(), "f1_team_radio")
@@ -119,18 +121,16 @@ def run_replay(session_path):
     clips.join()  # wait until every clip has finished playing
 
 
-TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".f1tv_token")
-
-
 def load_token():
-    """Read the F1 TV token from ~/.f1tv_token (outside the repo so it can't be committed).
+    """Read the F1 TV token from F1TV_TOKEN in .env, else ~/.f1tv_token (both kept out of git).
 
     Accepts either the bare token or the whole `login-session` cookie value from formula1.com.
     """
-    if not os.path.exists(TOKEN_FILE):
+    raw = raw_token()
+    if not raw:
         print("No F1 TV token found; connecting without login (F1 may withhold some data).")
         return None
-    raw = open(TOKEN_FILE, encoding="utf-8").read().strip()
+    raw = raw.strip()
     try:
         if raw.startswith("%7B") or raw.startswith("{"):
             raw = json.loads(unquote(raw))["data"]["subscriptionToken"]
@@ -202,6 +202,7 @@ if __name__ == "__main__":
         print(__doc__)
         sys.exit(1)
 
+    authorize_requests()  # the radio clips and TeamRadio.json come from F1's archive
     threading.Thread(target=player, daemon=True).start()
     mode = sys.argv[1]
     try:

@@ -104,6 +104,7 @@ def main(only=None):
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.write(os.path.join(HERE, "replay_server.py"), TOP + "replay_server.py")
         z.write(os.path.join(HERE, "race_catalog.py"), TOP + "race_catalog.py")  # imported by the server
+        z.write(os.path.join(HERE, "token_source.py"), TOP + "token_source.py")  # code only; .env is never shipped
         # shipping the code means shipping its license and credits
         for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
             if os.path.exists(os.path.join(HERE, name)):

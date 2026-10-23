@@ -31,6 +31,7 @@ from http.cookies import SimpleCookie
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from race_catalog import Catalog
+from token_source import archive_headers
 
 args = sys.argv[1:]
 PORT = next((int(a) for a in args if a.isdigit()), 8765)
@@ -160,7 +161,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return self.send_json(202, job)
 
     def proxy(self, path):
-        req = urllib.request.Request(F1_STATIC + quote(path), headers={"User-Agent": "livef1-replay"})
+        url = F1_STATIC + quote(path)
+        req = urllib.request.Request(url, headers={"User-Agent": "livef1-replay", **archive_headers(url)})
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 status, ctype, body = r.status, r.headers.get("Content-Type"), r.read()
