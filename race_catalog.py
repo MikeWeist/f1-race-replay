@@ -19,6 +19,8 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+from token_source import archive_headers
+
 STATIC = "https://livetiming.formula1.com/static/"
 CALENDAR_TTL = 600           # seconds the F1 calendar is cached
 ARCHIVE_TTL = 60             # seconds an archive-complete check is cached
@@ -105,7 +107,7 @@ def date_label(dt):
 
 
 def fetch_json(url, timeout=8):
-    req = urllib.request.Request(url, headers={"User-Agent": "livef1-replay"})
+    req = urllib.request.Request(url, headers={"User-Agent": "livef1-replay", **archive_headers(url)})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8-sig"))
 

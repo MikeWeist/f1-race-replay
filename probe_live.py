@@ -2,7 +2,7 @@
 Find out what F1's live feed gives with and without an F1 TV login.
 
 Run it before a session and leave it running. It connects twice at once, without a token and
-(if ~/.f1tv_token exists) with it, subscribes to every known topic, and counts for each topic
+(if a token is saved in .env or ~/.f1tv_token) with it, subscribes to every known topic, and counts for each topic
 how many updates arrived and how many bytes. A comparison prints every minute and at the end.
 
     python probe_live.py --minutes 120      # a whole session (reconnects if the feed drops)
@@ -26,6 +26,7 @@ from urllib.parse import unquote
 import requests
 
 from signalrcore_client import stream
+from token_source import ENV_FILE, ENV_KEY, TOKEN_FILE, raw_token, save_token as write_env_token
 
 TOPICS = [
     "Heartbeat", "SessionInfo", "SessionStatus", "TrackStatus", "SessionData", "ExtrapolatedClock",
@@ -35,7 +36,6 @@ TOPICS = [
     "CarData.z", "PitLaneTimeCollection", "PitStop", "PitStopSeries", "DriverRaceInfo", "DriverTracker",
     "OvertakeSeries", "ChampionshipPrediction", "DriverScore", "SPFeed", "ArchiveStatus",
 ]
-TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".f1tv_token")
 # claims that describe the plan, not the person
 PLAN_CLAIMS = ("SubscriptionStatus", "SubscribedProduct", "ents", "iss", "aud")
 
@@ -64,9 +64,8 @@ def parse_token(raw):
 
 def read_token():
     """The saved token, or None."""
-    if not os.path.exists(TOKEN_FILE):
-        return None
-    return parse_token(open(TOKEN_FILE, encoding="utf-8").read())
+    raw = raw_token()
+    return parse_token(raw) if raw else None
 
 
 def clipboard_text():
@@ -95,13 +94,8 @@ def save_token():
     if exp < datetime.now(timezone.utc):
         print(f"Not saved: that token expired {exp:%Y-%m-%d %H:%M} UTC. Log in again and copy a fresh one.")
         return
-    with open(TOKEN_FILE, "w", encoding="utf-8") as f:
-        f.write(raw.strip())
-    try:
-        os.chmod(TOKEN_FILE, 0o600)
-    except OSError:
-        pass
-    print(f"Saved to {TOKEN_FILE}. Valid until {exp:%Y-%m-%d %H:%M} UTC ({(exp - datetime.now(timezone.utc)).total_seconds() / 3600:.1f} h).")
+    write_env_token(raw.strip())
+    print(f"Saved to {ENV_FILE} ({ENV_KEY}). Valid until {exp:%Y-%m-%d %H:%M} UTC ({(exp - datetime.now(timezone.utc)).total_seconds() / 3600:.1f} h).")
     print("Next: python probe_live.py --token-info")
 
 
@@ -117,7 +111,7 @@ def token_info():
         print(e)
         return
     if not token:
-        print(f"No token yet. Save it to {TOKEN_FILE} (see the README).")
+        print(f"No token yet. Save it with --save-token, or as {ENV_KEY}= in {ENV_FILE} (see the README).")
         return
     c = claims_of(token)
     exp = datetime.fromtimestamp(c["exp"], timezone.utc)
@@ -213,7 +207,7 @@ async def main():
         else:
             lanes.append(Lane("with F1 TV login", token))
     elif not args.no_login and not token_problem:
-        print(f"No token at {TOKEN_FILE}: running the no-login connection only.")
+        print(f"No token in {ENV_FILE} or {TOKEN_FILE}: running the no-login connection only.")
 
     stop = asyncio.Event()
     tasks = [asyncio.create_task(l.run(stop)) for l in lanes]
